@@ -1,0 +1,14 @@
+{
+  "name": "Kasse-scanner",
+  "short_name": "Kasser",
+  "description": "Prototype: scanning af kirsebærkasser ved opsamling og vejning",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f1ee",
+  "theme_color": "#7a1023",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

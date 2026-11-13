@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7a1023">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Kasse-scanner</title>
+<style>
+/* Layout: én kolonne til telefon i holder på ATV'en. Lyst tema med høj kontrast, fordi den bruges i sollys.
+   Systemskrift med vilje: appen skal virke uden net, så ingen webfonte. */
+:root{
+  --cherry:#7a1023; --cherry-2:#5c0b1a; --cherry-ink:#fff6f6;
+  --bg:#f4f1ee; --surface:#ffffff; --ink:#151112; --muted:#5e5658; --line:#ddd5d2;
+  --ok:#11703d; --ok-bg:#dff3e6; --warn:#8a5a00; --warn-bg:#fff0c7; --err:#b3121f; --err-bg:#fde0e0;
+  --chip:#efe9e6;
+  --f:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:17px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--cherry);outline-offset:2px}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+
+header{background:var(--cherry);color:var(--cherry-ink);padding-top:env(safe-area-inset-top,0px);position:sticky;top:0;z-index:5}
+header .wrap{display:flex;flex-direction:column;gap:8px;padding-block:10px}
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{font-weight:800;font-size:1.05rem;letter-spacing:.01em;display:flex;align-items:center;gap:8px}
+.brand small{font-weight:500;opacity:.8}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font-size:.78rem;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--cherry-2);white-space:nowrap}
+.pill.ok{background:#1d7a4a}.pill.warn{background:#a86d00}.pill.err{background:#d0303c}
+nav{display:flex;gap:4px;background:var(--cherry-2);padding:4px;border-radius:12px}
+nav button{flex:1;border:0;background:transparent;color:var(--cherry-ink);opacity:.8;padding:8px 6px;border-radius:9px;font-weight:700;font-size:.92rem}
+nav button[aria-current="page"]{background:var(--cherry-ink);color:var(--cherry);opacity:1}
+
+main .wrap{padding-block:14px 120px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:12px}
+h2{margin:0;font-size:1.15rem}
+h3{margin:0;font-size:1rem}
+.muted{color:var(--muted)}
+.lbl{font-size:.74rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:5px}
+input[type=text],input[type=tel],select{font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);width:100%;min-width:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{border:0;border-radius:12px;padding:14px 16px;font-weight:800;font-size:1.02rem;background:var(--chip)}
+.btn.big{padding:20px;font-size:1.25rem}
+.btn.primary{background:var(--cherry);color:var(--cherry-ink)}
+.btn.ok{background:var(--ok);color:#fff}
+.btn.line{background:transparent;border:2px solid var(--line)}
+.btn.armed{background:var(--err);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row > .btn{flex:1 1 140px}
+
+/* aktiv tur */
+.counter{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.counter .big{font-size:4.6rem;font-weight:900;line-height:.9;letter-spacing:-.03em}
+.counter .meta{text-align:right}
+.last{border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;border:2px solid transparent}
+.last.ok{background:var(--ok-bg);border-color:var(--ok)}
+.last.warn{background:var(--warn-bg);border-color:var(--warn)}
+.last.err{background:var(--err-bg);border-color:var(--err)}
+.last.idle{background:var(--chip)}
+.last .code{font-size:2rem;font-weight:900;letter-spacing:.02em}
+.last .code b{color:var(--cherry)}
+.last .msg{font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--chip);border-radius:999px;padding:5px 10px;font-weight:700;font-size:.9rem}
+.chip span{color:var(--muted);font-weight:600}
+.list{display:flex;flex-direction:column}
+.li{display:grid;grid-template-columns:4.6em 1fr auto;gap:8px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line);font-size:.95rem}
+.li:last-child{border-bottom:0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok)}.dot.warn{background:#d39a00}.dot.err{background:var(--err)}
+.demo{border:2px dashed var(--line);background:transparent}
+.demo .btn{background:#fff;border:1px solid var(--line);font-weight:700;font-size:.92rem;padding:10px}
+.manual{display:flex;gap:8px}
+.manual input{font-size:1.4rem;letter-spacing:.08em}
+
+/* afstemning / tabeller */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.kpi{background:var(--chip);border-radius:12px;padding:10px}
+.kpi .v{font-size:1.5rem;font-weight:900}
+.kpi.err{background:var(--err-bg)} .kpi.ok{background:var(--ok-bg)}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+th:first-child,td:first-child{text-align:left}
+td.bad{color:var(--err);font-weight:800}
+@media (max-width:520px){th,td{padding:7px 5px}table{font-size:.88rem}}
+.callout{border-radius:12px;padding:10px 12px;font-weight:600}
+.callout.ok{background:var(--ok-bg)} .callout.err{background:var(--err-bg)} .callout.warn{background:var(--warn-bg)}
+pre{margin:0;font-size:.78rem;white-space:pre-wrap;word-break:break-all;background:var(--chip);padding:10px;border-radius:10px;max-height:300px;overflow:auto}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:10px}
+
+#flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .35s;z-index:20}
+#flash.ok{background:rgba(17,112,61,.28)} #flash.err{background:rgba(179,18,31,.35)} #flash.warn{background:rgba(211,154,0,.3)}
+#flash.on{opacity:1;transition:none}
+@media (prefers-reduced-motion:reduce){#flash{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="hrow">
+      <div class="brand">🍒 Kasse-scanner <small>prototype</small></div>
+      <div class="pills" id="pills"></div>
+    </div>
+    <nav aria-label="Visning">
+      <button data-act="view" data-v="mark" id="nav-mark">Mark</button>
+      <button data-act="view" data-v="pakkeri" id="nav-pakkeri">Pakkeri (demo)</button>
+      <button data-act="view" data-v="data" id="nav-data">Data</button>
+    </nav>
+  </div>
+</header>
+<main><div class="wrap" id="app"></div></main>
+<div id="flash"></div>
+
+<script>
+"use strict";
+/* ============ lager (på telefonen) ============ */
+const KEY = "kassescanner-proto-v1";
+const DEF = { enhed:"ATV-1", chauffoer:"", aktive:"1-60", simNet:true, view:"mark", ture:[], events:[], server:[], lastSync:0 };
+let st;
+try { st = Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch(e) { st = Object.assign({}, DEF); }
+let storageOk = true;
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(st)); storageOk = true; } catch(e) { storageOk = false; } }
+
+/* ============ hjælpere ============ */
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "x"+Date.now().toString(36)+Math.random().toString(36).slice(2));
+const nowIso = () => new Date().toISOString();
+const dayKey = d => { const x = new Date(d); return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); };
+const today = () => dayKey(Date.now());
+const hms = d => new Date(d).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+const hm = d => new Date(d).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit"});
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const kg = n => n.toLocaleString("da-DK",{minimumFractionDigits:1,maximumFractionDigits:1});
+const fmtKasse = k => `<b>${k.slice(0,2)}</b>·${k.slice(2)}`;
+
+function parseKasse(raw){
+  const code = String(raw).trim();
+  if (!/^\d{7}$/.test(code)) return { ok:false, code, why:"Ikke en kasse-label (skal være 7 cifre)" };
+  const plukker = parseInt(code.slice(0,2),10);
+  if (plukker === 0) return { ok:false, code, why:"Plukkernummer 00 findes ikke" };
+  return { ok:true, code, plukker, lob: parseInt(code.slice(2),10) };
+}
+function aktiveSet(){
+  const s = new Set();
+  String(st.aktive).split(",").forEach(p => { const m = p.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/); if (!m) return; const a=+m[1], b=m[2]?+m[2]:a; for (let i=Math.min(a,b); i<=Math.max(a,b); i++) s.add(i); });
+  return s;
+}
+
+/* ============ hændelser ============ */
+// Typer: OPSAML (kasse samlet op i marken), VEJ (kasse vejet), FORTRYD (annullerer en OPSAML), AFVIST (fejlscanning, gemmes til fejlrapport)
+const todays = () => st.events.filter(e => dayKey(e.t) === today());
+function cancelledIds(evts){ return new Set(evts.filter(e=>e.type==="FORTRYD").map(e=>e.ref)); }
+function opsamlIDag(){
+  const ev = todays(), c = cancelledIds(ev), m = new Map();
+  ev.forEach(e => { if (e.type==="OPSAML" && !c.has(e.id) && !m.has(e.kasse)) m.set(e.kasse, e); });
+  return m;
+}
+function vejIDag(){
+  const m = new Map();
+  todays().forEach(e => { if (e.type==="VEJ") { if (!m.has(e.kasse)) m.set(e.kasse, []); m.get(e.kasse).push(e); } });
+  return m;
+}
+function turEvents(turId){ const c = cancelledIds(st.events); return st.events.filter(e => e.tur===turId && e.type==="OPSAML" && !c.has(e.id)); }
+function addEvent(e){
+  const full = Object.assign({ id:uuid(), t:nowIso(), enhed:st.enhed, synced:false }, e);
+  st.events.push(full); save(); return full;
+}
+
+/* ============ GPS, skærmlås, lyd ============ */
+let fix = null, gpsState = "off", watchId = null, wakeLock = null, audio = null;
+function startGps(){
+  if (!("geolocation" in navigator)) { gpsState = "none"; return; }
+  if (watchId !== null) return;
+  gpsState = "wait";
+  watchId = navigator.geolocation.watchPosition(
+    p => { fix = { lat:+p.coords.latitude.toFixed(6), lon:+p.coords.longitude.toFixed(6), acc:Math.round(p.coords.accuracy), t:Date.now() }; gpsState = "ok"; renderPills(); },
+    err => { gpsState = err.code === 1 ? "denied" : "wait"; renderPills(); },
+    { enableHighAccuracy:true, maximumAge:5000, timeout:20000 }
+  );
+}
+function stopGps(){ if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; } gpsState = "off"; }
+async function keepAwake(){ try { if ("wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch(e) {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && aktivTur()) keepAwake(); });
+function tone(kind){
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const seq = kind==="ok" ? [[1400,.08]] : kind==="warn" ? [[900,.12],[900,.12]] : [[300,.18],[220,.28]];
+    let t = audio.currentTime;
+    seq.forEach(([f,d]) => { const o=audio.createOscillator(), g=audio.createGain(); o.frequency.value=f; o.type=kind==="err"?"square":"sine"; g.gain.setValueAtTime(.25,t); g.gain.exponentialRampToValueAtTime(.001,t+d); o.connect(g).connect(audio.destination); o.start(t); o.stop(t+d); t += d+.06; });
+  } catch(e) {}
+  try { navigator.vibrate && navigator.vibrate(kind==="ok" ? 60 : kind==="warn" ? [80,60,80] : [250,80,250]); } catch(e) {}
+  const f = document.getElementById("flash"); f.className = kind+" on"; setTimeout(()=>{ f.className = kind; }, 60);
+}
+
+/* ============ synkronisering (simuleret server) ============ */
+// I det rigtige system sendes køen til databasen. Hver hændelse har et unikt id, så gensendelse aldrig giver dubletter.
+const online = () => navigator.onLine && st.simNet;
+function sync(){
+  if (!online()) { renderPills(); return; }
+  const have = new Set(st.server.map(e=>e.id));
+  let n = 0;
+  st.events.forEach(e => { if (!e.synced) { if (!have.has(e.id)) { const c = Object.assign({}, e); delete c.synced; c.modtaget = nowIso(); st.server.push(c); } e.synced = true; n++; } });
+  if (n) { st.lastSync = Date.now(); save(); }
+  renderPills(); if (st.view === "data") render();
+}
+setInterval(sync, 3000);
+window.addEventListener("online", sync); window.addEventListener("offline", renderPills);
+
+/* ============ ture ============ */
+const aktivTur = () => st.ture.find(t => !t.slut) || null;
+function startTur(){
+  const nr = st.ture.filter(t => dayKey(t.start) === today()).length + 1;
+  const t = { id: st.enhed+"-"+today()+"-"+nr, nr, enhed:st.enhed, chauffoer:st.chauffoer||"", start:nowIso(), slut:null };
+  st.ture.push(t); save(); startGps(); keepAwake(); last = null; render();
+}
+function slutTur(){ const t = aktivTur(); if (!t) return; t.slut = nowIso(); save(); stopGps(); S.slutVist = t.id; render(); }
+
+/* ============ scanning ============ */
+let last = null; // {kind, code, msg}
+function handleScan(raw){
+  S.armed = null; // en scanning annullerer et halvt trykket "Afslut tur"
+  if (st.view === "pakkeri") return vejScan(raw);
+  const t = aktivTur();
+  const p = parseKasse(raw);
+  if (!t) { last = { kind:"err", code:p.code, msg:"Start en tur, før du scanner." }; tone("err"); return render(); }
+  if (!p.ok) { addEvent({ type:"AFVIST", tur:t.id, kasse:p.code, grund:p.why, gps:fix }); last = { kind:"err", code:p.code, msg:p.why }; tone("err"); return render(); }
+  const tidligere = opsamlIDag().get(p.code);
+  if (tidligere) {
+    const sammeTur = tidligere.tur === t.id;
+    const tt = st.ture.find(x => x.id === tidligere.tur);
+    const why = sammeTur ? "Allerede scannet i denne tur" : `Allerede samlet op i tur ${tt?tt.nr:"?"} kl. ${hm(tidligere.t)}`;
+    addEvent({ type:"AFVIST", tur:t.id, kasse:p.code, plukker:p.plukker, grund:"Dublet: "+why, gps:fix });
+    last = { kind:"err", code:p.code, msg:why+". Ikke talt med igen." }; tone("err"); return render();
+  }
+  addEvent({ type:"OPSAML", tur:t.id, kasse:p.code, plukker:p.plukker, gps:fix, chauffoer:t.chauffoer });
+  if (!aktiveSet().has(p.plukker)) { last = { kind:"warn", code:p.code, msg:`Talt med, men plukker ${p.plukker} står ikke på listen over aktive plukkere.` }; tone("warn"); }
+  else { last = { kind:"ok", code:p.code, msg:`Plukker ${p.plukker} · talt med` }; tone("ok"); }
+  render();
+}
+function fortryd(){
+  const t = aktivTur(); if (!t) return;
+  const ev = turEvents(t.id); const e = ev[ev.length-1]; if (!e) return;
+  addEvent({ type:"FORTRYD", tur:t.id, ref:e.id, kasse:e.kasse, plukker:e.plukker });
+  last = { kind:"warn", code:e.kasse, msg:"Sidste scanning er fortrudt og tælles ikke med." }; tone("warn"); render();
+}
+
+/* ============ pakkeri: simuleret vægt ============ */
+const simVaegt = () => +(9.4 + (Math.random()+Math.random()+Math.random()-1.5)*1.1).toFixed(2);
+function vej(kasse, quiet){
+  const p = parseKasse(kasse);
+  if (!p.ok) { addEvent({ type:"AFVIST", kasse:p.code, grund:"Vejning: "+p.why }); if (!quiet) { last = { kind:"err", code:p.code, msg:p.why }; tone("err"); } return; }
+  const dub = vejIDag().has(p.code);
+  const kendt = opsamlIDag().has(p.code);
+  const e = addEvent({ type:"VEJ", kasse:p.code, plukker:p.plukker, vaegt:simVaegt(), enhed:"VÆGT-1" });
+  if (!quiet) {
+    if (dub) { last = { kind:"err", code:p.code, msg:`Kassen er allerede vejet i dag. Markeret som dobbeltvejning (${kg(e.vaegt)} kg).` }; tone("err"); }
+    else if (!kendt) { last = { kind:"warn", code:p.code, msg:`Vejet ${kg(e.vaegt)} kg, men kassen blev ikke scannet i marken.` }; tone("warn"); }
+    else { last = { kind:"ok", code:p.code, msg:`Vejet ${kg(e.vaegt)} kg · plukker ${p.plukker}` }; tone("ok"); }
+  }
+}
+function vejScan(raw){ vej(raw, false); render(); }
+function vejHeleTuren(turId){
+  const ks = turEvents(turId).map(e => e.kasse).filter(k => !vejIDag().has(k));
+  let liste = ks.slice();
+  if (S.demoMangler && liste.length > 1) liste.splice(Math.floor(Math.random()*liste.length), 1);
+  liste.forEach(k => vej(k, true));
+  if (S.demoEkstra) { let k; do { k = String(10+Math.floor(Math.random()*40)).padStart(2,"0")+String(90000+Math.floor(Math.random()*9999)); } while (opsamlIDag().has(k)); vej(k, true); }
+  last = { kind:"ok", code:"", msg:`${liste.length + (S.demoEkstra?1:0)} kasser vejet.` }; tone("ok"); render();
+}
+
+/* ============ tastatur-input fra scanneren ============ */
+// DS3678 er sat op som Bluetooth-tastatur med ENTER efter hver kode. Vi lytter på hele siden,
+// så scanningen virker, uanset hvad der har fokus. Felter, man selv skriver i, springes over.
+let buf = "", bufT = 0;
+document.addEventListener("keydown", e => {
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  const now = Date.now();
+  if (now - bufT > 1500) buf = "";
+  bufT = now;
+  if (e.key === "Enter") { if (buf.length) { const code = buf; buf = ""; e.preventDefault(); handleScan(code); } return; }
+  if (e.key.length === 1) { buf += e.key; if (buf.length > 40) buf = buf.slice(-40); }
+});
+
+/* ============ tilstand til visning ============ */
+const S = { armed:null, manual:false, slutVist:null, pakTur:null, demoMangler:true, demoEkstra:true };
+
+/* ============ visning ============ */
+function renderPills(){
+  const q = st.events.filter(e => !e.synced).length;
+  const net = online() ? `<span class="pill ok">Net</span>` : `<span class="pill err">Intet net</span>`;
+  const gps = gpsState==="ok" ? `<span class="pill ok">GPS ±${fix.acc} m</span>` : gpsState==="wait" ? `<span class="pill warn">GPS søger</span>` : gpsState==="denied" ? `<span class="pill err">GPS afvist</span>` : gpsState==="none" ? `<span class="pill err">Ingen GPS</span>` : `<span class="pill">GPS slukket</span>`;
+  const ko = q ? `<span class="pill ${online()?"warn":"err"}">${q} i kø</span>` : `<span class="pill ok">Alt sendt</span>`;
+  const sto = storageOk ? "" : `<span class="pill err">Lager fuldt</span>`;
+  document.getElementById("pills").innerHTML = net + gps + ko + sto;
+}
+
+function viewMark(){
+  const t = aktivTur();
+  if (!t) {
+    const ture = st.ture.filter(x => dayKey(x.start) === today());
+    const slut = S.slutVist && st.ture.find(x => x.id === S.slutVist);
+    let sum = "";
+    if (slut) {
+      const ev = turEvents(slut.id); const pl = new Set(ev.map(e=>e.plukker));
+      const min = Math.max(1, Math.round((new Date(slut.slut)-new Date(slut.start))/60000));
+      sum = `<section class="card"><h2>Tur ${slut.nr} afsluttet</h2>
+        <div class="callout ok"><span class="num">${ev.length}</span> kasser fra <span class="num">${pl.size}</span> plukkere på ${min} min.</div>
+        <p class="muted" style="margin:0">Kør til pakkeriet. Når kasserne er vejet, viser afstemningen om alle kasser fra turen er kommet frem.</p></section>`;
+    }
+    return (last ? `<section class="card">${lastBox("")}</section>` : "") + sum + `<section class="card" aria-labelledby="start-h">
+      <h2 id="start-h">Klar til opsamling</h2>
+      <div class="grid2">
+        <div class="field"><label class="lbl" for="in-enhed">Enhed</label><input type="text" id="in-enhed" data-in="enhed" value="${esc(st.enhed)}"></div>
+        <div class="field"><label class="lbl" for="in-chauf">Chauffør</label><input type="text" id="in-chauf" data-in="chauffoer" placeholder="Navn" value="${esc(st.chauffoer)}"></div>
+      </div>
+      <button class="btn big primary" data-act="start">Start tur ${ture.length+1}</button>
+      <p class="muted" style="margin:0;font-size:.9rem">Når turen er startet, holdes skærmen tændt, og GPS-positionen gemmes ved hver scanning.</p>
+    </section>
+    ${ture.length ? `<section class="card"><h3>Ture i dag</h3><div class="list">${ture.map(x=>`<div class="li"><span class="num">Tur ${x.nr}</span><span>${hm(x.start)}–${x.slut?hm(x.slut):"…"} ${esc(x.chauffoer)}</span><b class="num">${turEvents(x.id).length}</b></div>`).join("")}</div></section>` : ""}
+    ${demoCard(false)}`;
+  }
+  const ev = turEvents(t.id);
+  const pr = {}; ev.forEach(e => { pr[e.plukker] = (pr[e.plukker]||0)+1; });
+  const min = Math.max(0, Math.round((Date.now()-new Date(t.start))/60000));
+  const recent = st.events.filter(e => e.tur===t.id && (e.type==="OPSAML"||e.type==="AFVIST"||e.type==="FORTRYD")).slice(-8).reverse();
+  const c = cancelledIds(st.events);
+  return `<section class="card">
+      <div class="counter">
+        <div><div class="lbl">Tur ${t.nr} · kasser i traileren</div><div class="big num" id="count">${ev.length}</div></div>
+        <div class="meta muted"><div>${esc(t.chauffoer||st.enhed)}</div><div class="num">startet ${hm(t.start)} · ${min} min</div><div class="num">${Object.keys(pr).length} plukkere</div></div>
+      </div>
+      ${lastBox("Scan første kasse. Scanneren skal være forbundet via Bluetooth.")}
+      ${S.manual ? `<form class="manual" id="manual-form"><input type="tel" id="manual-in" inputmode="numeric" maxlength="7" placeholder="1700123" aria-label="Kassenummer" autocomplete="off"><button class="btn ok" type="submit">OK</button></form>` : ""}
+      <div class="row">
+        <button class="btn line" data-act="manual">${S.manual?"Luk indtastning":"Tast nummer"}</button>
+        <button class="btn line" data-act="fortryd" ${ev.length?"":"disabled"}>Fortryd sidste</button>
+      </div>
+      <button class="btn big ${S.armed==="slut"?"armed":"primary"}" data-act="slut">${S.armed==="slut"?"Tryk igen for at afslutte tur "+t.nr:"Afslut tur "+t.nr}</button>
+    </section>
+    ${Object.keys(pr).length ? `<section class="card"><h3>Pr. plukker i denne tur</h3><div class="chips">${Object.keys(pr).sort((a,b)=>a-b).map(k=>`<span class="chip num">${String(k).padStart(2,"0")} <span>× ${pr[k]}</span></span>`).join("")}</div></section>` : ""}
+    ${recent.length ? `<section class="card"><h3>Seneste scanninger</h3><div class="list">${recent.map(e=>{
+      const cls = e.type==="OPSAML" ? (c.has(e.id)?"warn":"ok") : e.type==="FORTRYD" ? "warn" : "err";
+      const txt = e.type==="OPSAML" ? (c.has(e.id)?"Fortrudt":"Talt med") : e.type==="FORTRYD" ? "Fortryd" : esc(e.grund||"Afvist");
+      return `<div class="li"><span class="num muted">${hms(e.t)}</span><span><span class="dot ${cls}"></span>${txt}</span><b class="num">${esc(e.kasse||"")}</b></div>`;}).join("")}</div></section>` : ""}
+    ${demoCard(true)}`;
+}
+function lastBox(idle){
+  if (!last) return `<div class="last idle"><div class="msg muted">${idle}</div></div>`;
+  return `<div class="last ${last.kind}" role="status" aria-live="assertive">${last.code?`<div class="code num">${/^\d{7}$/.test(last.code)?fmtKasse(last.code):esc(last.code)}</div>`:""}<div class="msg">${esc(last.msg)}</div></div>`;
+}
+function demoCard(aktiv){
+  return `<section class="card demo"><h3>Afprøv uden scanner</h3>
+    <p class="muted" style="margin:0;font-size:.9rem">Knapperne sender en kode, præcis som scanneren ville gøre. På en PC kan du også taste 7 cifre og trykke Enter.</p>
+    <div class="row">
+      <button class="btn" data-act="sim" data-v="ok" ${aktiv?"":"disabled"}>Simulér scanning</button>
+      <button class="btn" data-act="sim" data-v="dub" ${aktiv?"":"disabled"}>Simulér dublet</button>
+      <button class="btn" data-act="sim" data-v="bad" ${aktiv?"":"disabled"}>Simulér ugyldig</button>
+      <button class="btn" data-act="sim" data-v="ukendt" ${aktiv?"":"disabled"}>Ukendt plukker</button>
+    </div></section>`;
+}
+
+function viewPakkeri(){
+  const ture = st.ture.filter(x => dayKey(x.start) === today());
+  if (!S.pakTur || !ture.find(x=>x.id===S.pakTur)) S.pakTur = (ture.filter(x=>x.slut).slice(-1)[0] || ture.slice(-1)[0] || {}).id || null;
+  const op = opsamlIDag(), vj = vejIDag();
+  let totKg = 0; vj.forEach(arr => { totKg += arr[0].vaegt; });
+  const diff = op.size - [...op.keys()].filter(k => vj.has(k)).length;
+  const fejl = todays().filter(e => e.type==="AFVIST").length + [...vj.values()].filter(a=>a.length>1).length;
+  // afstemning for valgt tur
+  let afst = `<p class="muted" style="margin:0">Ingen ture i dag endnu. Start en tur under Mark og scan nogle kasser.</p>`;
+  if (S.pakTur) {
+    const t = st.ture.find(x=>x.id===S.pakTur);
+    const ks = turEvents(t.id).map(e=>e.kasse);
+    const vejet = ks.filter(k => vj.has(k)), mangler = ks.filter(k => !vj.has(k));
+    afst = `<div class="kpis num">
+        <div class="kpi"><div class="lbl">Opsamlet</div><div class="v">${ks.length}</div></div>
+        <div class="kpi ${vejet.length===ks.length&&ks.length?"ok":""}"><div class="lbl">Vejet</div><div class="v">${vejet.length}</div></div>
+        <div class="kpi ${mangler.length?"err":""}"><div class="lbl">Mangler</div><div class="v">${mangler.length}</div></div>
+        <div class="kpi"><div class="lbl">Kg</div><div class="v">${kg(vejet.reduce((s,k)=>s+vj.get(k)[0].vaegt,0))}</div></div>
+      </div>
+      ${!vejet.length ? `<div class="callout warn">Turens kasser er ikke vejet endnu.</div>` : mangler.length ? `<div class="callout err">Mangler på vægten: ${mangler.map(k=>`<b class="num">${k}</b> (plukker ${parseInt(k.slice(0,2),10)})`).join(", ")}. Find kassen nu, mens traileren stadig er her.</div>` : `<div class="callout ok">Alle kasser fra tur ${t.nr} er vejet.</div>`}
+      <div class="row">
+        <button class="btn primary" data-act="vejtur" ${ks.filter(k=>!vj.has(k)).length?"":"disabled"}>Vej turens kasser (simulering)</button>
+      </div>
+      <label class="switch"><span>Lad én kasse "forsvinde" på vej til vægten</span><input type="checkbox" id="chk-mangler" ${S.demoMangler?"checked":""}></label>
+      <label class="switch"><span>Vej også én kasse, der ikke blev scannet i marken</span><input type="checkbox" id="chk-ekstra" ${S.demoEkstra?"checked":""}></label>`;
+  }
+  const ikkeOps = [...vj.keys()].filter(k => !op.has(k));
+  const dobbelt = [...vj.entries()].filter(([k,a]) => a.length>1).map(([k])=>k);
+  // pr. plukker
+  const pl = {};
+  op.forEach((e,k) => { const p=e.plukker; pl[p]=pl[p]||{o:0,v:0,kg:0}; pl[p].o++; });
+  vj.forEach((a,k) => { const p=a[0].plukker; pl[p]=pl[p]||{o:0,v:0,kg:0}; pl[p].v++; pl[p].kg+=a[0].vaegt; });
+  const rows = Object.keys(pl).sort((a,b)=>a-b).map(p => { const r=pl[p], d=r.o-[...op.entries()].filter(([k,e])=>e.plukker==p && vj.has(k)).length;
+    return `<tr><td>${String(p).padStart(2,"0")}</td><td>${r.o}</td><td>${r.v}</td><td class="${d?"bad":""}">${d||"–"}</td><td>${kg(r.kg)}</td><td>${r.v?kg(r.kg/r.v):"–"}</td></tr>`; }).join("");
+  return `<section class="card">
+      <h2>Pakkeri: vejning og afstemning</h2>
+      <p class="muted" style="margin:0;font-size:.92rem">Dette er en simulering. I det rigtige system kommer vejningen fra Dini-vægten med kassens stregkode, og afstemningen vises på en skærm ved vægten. Scanner du en kasse her, bliver den "vejet" med en tilfældig vægt.</p>
+      ${lastBox("Scan en kasse for at veje den.")}
+    </section>
+    <section class="card">
+      <div class="field"><label class="lbl" for="sel-tur">Afstemning for tur</label>
+        <select id="sel-tur">${ture.map(x=>`<option value="${esc(x.id)}" ${x.id===S.pakTur?"selected":""}>Tur ${x.nr} · ${hm(x.start)} · ${turEvents(x.id).length} kasser${x.slut?"":" (i gang)"}</option>`).join("")}</select></div>
+      ${afst}
+    </section>
+    <section class="card">
+      <h2>I dag</h2>
+      <div class="kpis num">
+        <div class="kpi"><div class="lbl">Opsamlet</div><div class="v">${op.size}</div></div>
+        <div class="kpi"><div class="lbl">Indvejet</div><div class="v">${vj.size}</div></div>
+        <div class="kpi ${diff?"err":""}"><div class="lbl">Difference</div><div class="v">${diff}</div></div>
+        <div class="kpi"><div class="lbl">Kg i alt</div><div class="v">${kg(totKg)}</div></div>
+      </div>
+      ${ikkeOps.length ? `<div class="callout warn">Vejet uden at være scannet i marken: ${ikkeOps.map(k=>`<b class="num">${k}</b>`).join(", ")}</div>` : ""}
+      ${dobbelt.length ? `<div class="callout err">Vejet to gange: ${dobbelt.map(k=>`<b class="num">${k}</b>`).join(", ")} (kun første vejning tæller)</div>` : ""}
+      <div class="muted" style="font-size:.9rem">Fejlregistreringer i dag: <b class="num">${fejl}</b></div>
+      ${rows ? `<div class="tbl"><table class="num"><thead><tr><th>Plukker</th><th>Opsaml.</th><th>Vejet</th><th>Diff.</th><th>Kg</th><th>Snit</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+    </section>`;
+}
+
+function viewData(){
+  const q = st.events.filter(e=>!e.synced).length;
+  return `<section class="card">
+      <h2>Afsendelse</h2>
+      <label class="switch"><span><b>Mobilnet</b> (simulering)<br><span class="muted" style="font-size:.9rem">Slå fra for at se, at scanninger gemmes på telefonen og sendes, når nettet kommer igen.</span></span><input type="checkbox" id="chk-net" ${st.simNet?"checked":""}></label>
+      <div class="kpis num">
+        <div class="kpi ${q?"err":"ok"}"><div class="lbl">I kø</div><div class="v">${q}</div></div>
+        <div class="kpi"><div class="lbl">Modtaget</div><div class="v">${st.server.length}</div></div>
+        <div class="kpi"><div class="lbl">Telefon-net</div><div class="v" style="font-size:1rem">${navigator.onLine?"Ja":"Nej"}</div></div>
+        <div class="kpi"><div class="lbl">Sidst sendt</div><div class="v" style="font-size:1rem">${st.lastSync?hms(st.lastSync):"–"}</div></div>
+      </div>
+      <p class="muted" style="margin:0;font-size:.9rem">I prototypen er "serveren" en kopi her på telefonen. I det rigtige system er det den centrale database.</p>
+    </section>
+    <section class="card">
+      <h2>Indstillinger</h2>
+      <div class="field"><label class="lbl" for="in-aktive">Aktive plukkernumre</label><input type="text" id="in-aktive" data-in="aktive" value="${esc(st.aktive)}" placeholder="fx 1-50, 55"></div>
+    </section>
+    <section class="card">
+      <h2>Data</h2>
+      <div class="row">
+        <button class="btn" data-act="csv">Hent hændelser som CSV</button>
+        <button class="btn ${S.armed==="nulstil"?"armed":"line"}" data-act="nulstil">${S.armed==="nulstil"?"Tryk igen: slet alle data":"Nulstil demo-data"}</button>
+      </div>
+      <div class="lbl">Seneste hændelser (som de sendes)</div>
+      <pre>${esc(st.events.slice(-12).reverse().map(e=>JSON.stringify(Object.assign({},e,{synced:undefined}))).join("\n")) || "Ingen endnu"}</pre>
+    </section>`;
+}
+
+function render(){
+  ["mark","pakkeri","data"].forEach(v => document.getElementById("nav-"+v).setAttribute("aria-current", st.view===v?"page":"false"));
+  const app = document.getElementById("app");
+  app.innerHTML = st.view==="mark" ? viewMark() : st.view==="pakkeri" ? viewPakkeri() : viewData();
+  renderPills();
+  if (S.manual) { const i = document.getElementById("manual-in"); if (i) i.focus(); }
+}
+
+/* ============ handlinger ============ */
+document.addEventListener("input", e => {
+  const k = e.target.dataset && e.target.dataset.in;
+  if (k) { st[k] = e.target.value; save(); }
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "sel-tur") { S.pakTur = e.target.value; render(); }
+  if (e.target.id === "chk-mangler") { S.demoMangler = e.target.checked; }
+  if (e.target.id === "chk-ekstra") { S.demoEkstra = e.target.checked; }
+  if (e.target.id === "chk-net") { st.simNet = e.target.checked; save(); sync(); render(); }
+});
+document.addEventListener("submit", e => {
+  if (e.target.id !== "manual-form") return;
+  e.preventDefault();
+  const v = document.getElementById("manual-in").value;
+  document.getElementById("manual-in").value = "";
+  handleScan(v);
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  // Fjern fokus fra knappen, så scannerens ENTER aldrig "trykker" på den igen.
+  if (document.activeElement && document.activeElement.tagName === "BUTTON") document.activeElement.blur();
+  const a = b.dataset.act, v = b.dataset.v;
+  if (a !== "slut" && a !== "nulstil") S.armed = null;
+  if (a === "view") { st.view = v; last = null; save(); render(); window.scrollTo(0,0); return; }
+  if (a === "start") { S.slutVist = null; startTur(); return; }
+  if (a === "slut") { if (S.armed !== "slut") { S.armed = "slut"; render(); return; } S.armed = null; slutTur(); return; }
+  if (a === "manual") { S.manual = !S.manual; render(); return; }
+  if (a === "fortryd") { fortryd(); return; }
+  if (a === "sim") {
+    const t = aktivTur(); if (!t) return;
+    const aktive = [...aktiveSet()];
+    if (v === "ok") { let k; do { const p = aktive[Math.floor(Math.random()*aktive.length)] || 17; k = String(p).padStart(2,"0") + String(1+Math.floor(Math.random()*400)).padStart(5,"0"); } while (opsamlIDag().has(k)); handleScan(k); }
+    if (v === "dub") { const ev = turEvents(t.id); handleScan(ev.length ? ev[Math.floor(Math.random()*ev.length)].kasse : "1700001"); }
+    if (v === "bad") handleScan(["17001","ABC1234","17000123"][Math.floor(Math.random()*3)]);
+    if (v === "ukendt") { let p = 99; const s = aktiveSet(); while (s.has(p) && p > 1) p--; handleScan(String(p).padStart(2,"0") + String(1+Math.floor(Math.random()*400)).padStart(5,"0")); }
+    return;
+  }
+  if (a === "vejtur") { if (S.pakTur) vejHeleTuren(S.pakTur); return; }
+  if (a === "csv") {
+    const cols = ["id","type","t","enhed","tur","kasse","plukker","vaegt","lat","lon","gps_noejagtighed_m","grund","ref","sendt"];
+    const lines = [cols.join(";")].concat(st.events.map(e => [e.id,e.type,e.t,e.enhed,e.tur||"",e.kasse||"",e.plukker||"",e.vaegt!=null?String(e.vaegt).replace(".",","):"",e.gps?e.gps.lat:"",e.gps?e.gps.lon:"",e.gps?e.gps.acc:"",(e.grund||"").replace(/;/g,","),e.ref||"",e.synced?"ja":"nej"].join(";")));
+    const blob = new Blob(["﻿"+lines.join("\n")], {type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob); const link = document.createElement("a");
+    link.href = url; link.download = "kassescanninger-"+today()+".csv"; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    return;
+  }
+  if (a === "nulstil") { if (S.armed !== "nulstil") { S.armed = "nulstil"; render(); return; } S.armed = null; const keep = { enhed:st.enhed, chauffoer:st.chauffoer, aktive:st.aktive }; st = Object.assign({}, DEF, keep); last = null; stopGps(); save(); render(); return; }
+});
+
+/* ============ start ============ */
+if (aktivTur()) { startGps(); keepAwake(); }
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) { navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+render();
+setInterval(() => { if (aktivTur() && st.view === "mark" && !S.manual) { const el = document.querySelector(".counter .meta"); if (el) render(); } }, 30000);
+</script>
+</body>
+</html>
