@@ -99,6 +99,15 @@ td.bad{color:var(--err);font-weight:800}
 pre{margin:0;font-size:.78rem;white-space:pre-wrap;word-break:break-all;background:var(--chip);padding:10px;border-radius:10px;max-height:300px;overflow:auto}
 .switch{display:flex;align-items:center;justify-content:space-between;gap:10px}
 
+/* kamera-scanning (fuld skærm, ligger uden for #app så videoen ikke genskabes ved hver scanning) */
+.cam{position:fixed;inset:0;z-index:15;background:#0d0a0b;color:#fff;display:flex;flex-direction:column;gap:10px;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) max(14px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 14px) max(14px,env(safe-area-inset-left,0px))}
+.cam-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:1.1rem}
+.cam-view{position:relative;flex:1;min-height:0;border-radius:14px;overflow:hidden;background:#000}
+.cam-view video{width:100%;height:100%;object-fit:cover;display:block}
+.cam-guide{position:absolute;left:8%;right:8%;top:38%;height:24%;border:3px solid rgba(255,255,255,.9);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+.cam .last{color:var(--ink)}
+.cam .btn.line{color:#fff;border-color:#5a5050}
 #flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .35s;z-index:20}
 #flash.ok{background:rgba(17,112,61,.28)} #flash.err{background:rgba(179,18,31,.35)} #flash.warn{background:rgba(211,154,0,.3)}
 #flash.on{opacity:1;transition:none}
@@ -121,6 +130,15 @@ pre{margin:0;font-size:.78rem;white-space:pre-wrap;word-break:break-all;backgrou
 </header>
 <main><div class="wrap" id="app"></div></main>
 <div id="flash"></div>
+<div id="cam" class="cam" hidden role="dialog" aria-label="Scan med kamera">
+  <div class="cam-top"><b>Scan med kamera</b><span id="cam-count" class="num"></span></div>
+  <div class="cam-view"><video id="cam-video" playsinline muted autoplay></video><div class="cam-guide"></div></div>
+  <div id="cam-status" class="last idle"><div class="msg">Hold stregkoden inden for rammen.</div></div>
+  <div class="row">
+    <button class="btn line" data-act="torch" id="cam-torch" hidden>Lys til/fra</button>
+    <button class="btn primary" data-act="camclose">Luk kamera</button>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -278,6 +296,91 @@ function vejHeleTuren(turId){
   last = { kind:"ok", code:"", msg:`${liste.length + (S.demoEkstra?1:0)} kasser vejet.` }; tone("ok"); render();
 }
 
+/* ============ kamera-scanning (reserve når scanneren ikke er ved hånden) ============ */
+// Chrome på Android har en indbygget stregkodelæser (BarcodeDetector). iPhone har ikke,
+// så der hentes ZXing første gang kameraet bruges (gemmes derefter til brug uden net).
+const ZXING_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
+const cam = { on:false, stream:null, timer:null, detector:null, reader:null, track:null, torch:false, lastCode:"", lastT:0 };
+function loadScript(src){
+  return new Promise((res, rej) => {
+    if (window.ZXing) return res();
+    const s = document.createElement("script"); s.src = src; s.onload = () => res(); s.onerror = () => rej(new Error("load"));
+    document.head.appendChild(s);
+  });
+}
+function camFound(code){
+  const now = Date.now();
+  if (code === cam.lastCode && now - cam.lastT < 3000) return; // samme kode holdt foran kameraet tælles kun én gang
+  cam.lastCode = code; cam.lastT = now;
+  handleScan(code);
+}
+function setCamMsg(kind, msg){ const s = document.getElementById("cam-status"); s.className = "last " + kind; s.innerHTML = `<div class="msg">${esc(msg)}</div>`; }
+async function openCam(){
+  const el = document.getElementById("cam"), video = document.getElementById("cam-video");
+  el.hidden = false; cam.on = true; cam.lastCode = ""; last = null; setCamMsg("idle", "Starter kameraet …");
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error("nocam"), { name:"NotSupportedError" });
+    let native = false;
+    if ("BarcodeDetector" in window) { try { native = (await BarcodeDetector.getSupportedFormats()).includes("code_128"); } catch(e) {} }
+    if (native) {
+      cam.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1280 }, height:{ ideal:720 } }, audio:false });
+      if (!cam.on) return closeCam();
+      video.srcObject = cam.stream; await video.play();
+      cam.track = cam.stream.getVideoTracks()[0];
+      cam.detector = new BarcodeDetector({ formats:["code_128"] });
+      const loop = async () => {
+        if (!cam.on) return;
+        try { if (video.readyState >= 2) { const r = await cam.detector.detect(video); if (r && r.length) camFound(r[0].rawValue); } } catch(e) {}
+        cam.timer = setTimeout(loop, 120);
+      };
+      loop();
+    } else {
+      await loadScript(ZXING_URL);
+      if (!cam.on) return closeCam();
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      cam.reader = new ZXing.BrowserMultiFormatReader(hints, 150);
+      await cam.reader.decodeFromConstraints({ video:{ facingMode:{ ideal:"environment" } } }, video, (res) => { if (res && cam.on) camFound(res.getText()); });
+      if (!cam.on) return closeCam();
+      cam.stream = video.srcObject; cam.track = cam.stream && cam.stream.getVideoTracks()[0];
+    }
+    setCamMsg("idle", "Hold stregkoden inden for rammen.");
+    try { const caps = cam.track && cam.track.getCapabilities && cam.track.getCapabilities(); document.getElementById("cam-torch").hidden = !(caps && caps.torch); } catch(e) {}
+    updateCam();
+  } catch(e) {
+    const n = e && e.name;
+    setCamMsg("err",
+      (n === "NotAllowedError" || n === "SecurityError") ? "Kameraet er ikke tilladt. Giv lov til kameraet i browserens indstillinger for siden." :
+      (e && e.message === "load") ? "Kamera-scanning skal hentes første gang. Prøv igen, når der er net." :
+      (n === "NotFoundError" || n === "NotSupportedError") ? "Der er intet kamera på denne enhed." :
+      "Kameraet kunne ikke startes. Luk og prøv igen.");
+  }
+}
+function closeCam(){
+  cam.on = false; clearTimeout(cam.timer);
+  try { cam.reader && cam.reader.reset(); } catch(e) {}
+  try { cam.stream && cam.stream.getTracks().forEach(t => t.stop()); } catch(e) {}
+  cam.reader = cam.stream = cam.track = cam.detector = null; cam.torch = false;
+  const v = document.getElementById("cam-video"); if (v) v.srcObject = null;
+  document.getElementById("cam-torch").hidden = true;
+  document.getElementById("cam").hidden = true;
+}
+async function toggleTorch(){
+  if (!cam.track) return;
+  cam.torch = !cam.torch;
+  try { await cam.track.applyConstraints({ advanced:[{ torch:cam.torch }] }); } catch(e) { cam.torch = false; }
+}
+function updateCam(){
+  if (!cam.on) return;
+  const t = aktivTur();
+  document.getElementById("cam-count").textContent = t ? `Tur ${t.nr} · ${turEvents(t.id).length} kasser` : "";
+  if (last) {
+    const s = document.getElementById("cam-status"); s.className = "last " + last.kind;
+    s.innerHTML = (last.code && /^\d{7}$/.test(last.code) ? `<div class="code num">${fmtKasse(last.code)}</div>` : "") + `<div class="msg">${esc(last.msg)}</div>`;
+  }
+}
+
 /* ============ tastatur-input fra scanneren ============ */
 // DS3678 er sat op som Bluetooth-tastatur med ENTER efter hver kode. Vi lytter på hele siden,
 // så scanningen virker, uanset hvad der har fokus. Felter, man selv skriver i, springes over.
@@ -343,6 +446,7 @@ function viewMark(){
       ${lastBox("Scan første kasse. Scanneren skal være forbundet via Bluetooth.")}
       ${S.manual ? `<form class="manual" id="manual-form"><input type="tel" id="manual-in" inputmode="numeric" maxlength="7" placeholder="1700123" aria-label="Kassenummer" autocomplete="off"><button class="btn ok" type="submit">OK</button></form>` : ""}
       <div class="row">
+        <button class="btn line" data-act="camopen">Scan med kamera</button>
         <button class="btn line" data-act="manual">${S.manual?"Luk indtastning":"Tast nummer"}</button>
         <button class="btn line" data-act="fortryd" ${ev.length?"":"disabled"}>Fortryd sidste</button>
       </div>
@@ -462,6 +566,7 @@ function render(){
   const app = document.getElementById("app");
   app.innerHTML = st.view==="mark" ? viewMark() : st.view==="pakkeri" ? viewPakkeri() : viewData();
   renderPills();
+  updateCam();
   if (S.manual) { const i = document.getElementById("manual-in"); if (i) i.focus(); }
 }
 
@@ -489,9 +594,12 @@ document.addEventListener("click", e => {
   if (document.activeElement && document.activeElement.tagName === "BUTTON") document.activeElement.blur();
   const a = b.dataset.act, v = b.dataset.v;
   if (a !== "slut" && a !== "nulstil") S.armed = null;
-  if (a === "view") { st.view = v; last = null; save(); render(); window.scrollTo(0,0); return; }
+  if (a === "view") { closeCam(); st.view = v; last = null; save(); render(); window.scrollTo(0,0); return; }
   if (a === "start") { S.slutVist = null; startTur(); return; }
-  if (a === "slut") { if (S.armed !== "slut") { S.armed = "slut"; render(); return; } S.armed = null; slutTur(); return; }
+  if (a === "slut") { if (S.armed !== "slut") { S.armed = "slut"; render(); return; } S.armed = null; closeCam(); slutTur(); return; }
+  if (a === "camopen") { S.manual = false; render(); openCam(); return; }
+  if (a === "camclose") { closeCam(); render(); return; }
+  if (a === "torch") { toggleTorch(); return; }
   if (a === "manual") { S.manual = !S.manual; render(); return; }
   if (a === "fortryd") { fortryd(); return; }
   if (a === "sim") {
