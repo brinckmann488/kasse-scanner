@@ -118,7 +118,7 @@ pre{margin:0;font-size:.78rem;white-space:pre-wrap;word-break:break-all;backgrou
 <header>
   <div class="wrap">
     <div class="hrow">
-      <div class="brand">🍒 Kasse-scanner <small>prototype</small></div>
+      <div class="brand">🍒 Kasse-scanner <small>prototype · v3</small></div>
       <div class="pills" id="pills"></div>
     </div>
     <nav aria-label="Visning">
@@ -428,7 +428,7 @@ function viewMark(){
         <div class="field"><label class="lbl" for="in-chauf">Chauffør</label><input type="text" id="in-chauf" data-in="chauffoer" placeholder="Navn" value="${esc(st.chauffoer)}"></div>
       </div>
       <button class="btn big primary" data-act="start">Start tur ${ture.length+1}</button>
-      <p class="muted" style="margin:0;font-size:.9rem">Når turen er startet, holdes skærmen tændt, og GPS-positionen gemmes ved hver scanning.</p>
+      <p class="muted" style="margin:0;font-size:.9rem">Når turen er startet, kan du scanne med Bluetooth-scanneren, med telefonens kamera eller taste nummeret. Skærmen holdes tændt, og GPS-positionen gemmes ved hver scanning.</p>
     </section>
     ${ture.length ? `<section class="card"><h3>Ture i dag</h3><div class="list">${ture.map(x=>`<div class="li"><span class="num">Tur ${x.nr}</span><span>${hm(x.start)}–${x.slut?hm(x.slut):"…"} ${esc(x.chauffoer)}</span><b class="num">${turEvents(x.id).length}</b></div>`).join("")}</div></section>` : ""}
     ${demoCard(false)}`;
