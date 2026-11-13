@@ -19,6 +19,7 @@
   color-scheme:light;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:17px;line-height:1.4;-webkit-tap-highlight-color:transparent}
 .num{font-variant-numeric:tabular-nums}
 button{font:inherit;color:inherit;cursor:pointer}
@@ -118,7 +119,7 @@ pre{margin:0;font-size:.78rem;white-space:pre-wrap;word-break:break-all;backgrou
 <header>
   <div class="wrap">
     <div class="hrow">
-      <div class="brand">🍒 Kasse-scanner <small>prototype · v3</small></div>
+      <div class="brand">🍒 Kasse-scanner <small>prototype · v4</small></div>
       <div class="pills" id="pills"></div>
     </div>
     <nav aria-label="Visning">
@@ -341,7 +342,7 @@ async function openCam(){
       hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
       hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
       cam.reader = new ZXing.BrowserMultiFormatReader(hints, 150);
-      await cam.reader.decodeFromConstraints({ video:{ facingMode:{ ideal:"environment" } } }, video, (res) => { if (res && cam.on) camFound(res.getText()); });
+      await cam.reader.decodeFromConstraints({ video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1280 }, height:{ ideal:720 } } }, video, (res) => { if (res && cam.on) camFound(res.getText()); });
       if (!cam.on) return closeCam();
       cam.stream = video.srcObject; cam.track = cam.stream && cam.stream.getVideoTracks()[0];
     }

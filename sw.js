@@ -1,5 +1,5 @@
 // Gemmer appen på telefonen, så den kan åbnes uden net.
-const CACHE = "kassescanner-v3";
+const CACHE = "kassescanner-v4";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", e => {
